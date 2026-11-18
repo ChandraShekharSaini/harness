@@ -4,7 +4,7 @@ metadata:
   name: backend-config
   namespace: project-1
 data:
-  DB_HOST: "<YOUR_RDS_ENDPOINT>"
+  DB_HOST: "shopping-mysql.cotyq8wcmhll.us-east-1.rds.amazonaws.com"
   DB_PORT: "3306"
   DB_NAME: "shopping"
   DB_USERNAME: "backenduser"
