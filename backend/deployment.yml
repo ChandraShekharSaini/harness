@@ -1,12 +1,12 @@
 
-apiVersion: apps/v1
+ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
   namespace: project-1
 
 spec:
-  replicas: 2
+  replicas: 1
 
   selector:
     matchLabels:
@@ -22,16 +22,24 @@ spec:
 
       containers:
         - name: backend
-          image: 127854692984.dkr.ecr.us-east-1.amazonaws.com/shopping-site-backend:af3bbfb
+          image:  127854692984.dkr.ecr.us-east-1.amazonaws.com/shopping-site-backend:af3bbfb
 
           ports:
             - containerPort: 8084
+
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
 
           envFrom:
             - configMapRef:
                 name: backend-config
 
-           env:
+          env:
             - name: MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -58,3 +66,8 @@ spec:
       targetPort: 8084
 
   type: ClusterIP
+
+
+     
+
+
