@@ -1,5 +1,90 @@
+
 pipeline:
+  name: infra Terraform
+  identifier: infra_terraform
+
+  inputs:
+    aws_access_key_id:
+      type: secret
+      default: account.AWS_ACCESS_KEY_ID
+
+    aws_secret_access_key:
+      type: secret
+      default: account.AWS_SECRET_ACCESS_KEY
+
   stages:
-    - steps:
-        - run:
-            script: echo "hello world"
+    - name: Terraform Infrastructure
+      identifier: terraform_infrastructure
+
+      runtime: shell
+
+      platform:
+        os: linux
+        arch: amd64
+
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_DEFAULT_REGION: us-east-1
+        TF_WORKING_DIR: EKS-Terraform
+        TF_IN_AUTOMATION: "true"
+
+      steps:
+        - name: Terraform Deployment
+          run:
+            shell: bash
+
+            env:
+              AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+              AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+              AWS_DEFAULT_REGION: us-east-1
+              TF_WORKING_DIR: EKS-Terraform
+              TF_IN_AUTOMATION: "true"
+
+            script: |
+              set -euo pipefail
+
+              echo "=================================="
+              echo "Harness Terraform Deployment"
+              echo "=================================="
+
+              echo "Checking dependencies..."
+
+              command -v terraform
+              command -v aws
+              command -v git
+
+              terraform version
+              aws --version
+              git --version
+
+              echo "Validating AWS Credentials..."
+              aws sts get-caller-identity
+
+              echo "Checking repository..."
+              ls -la
+
+              test -d "${TF_WORKING_DIR}"
+              cd "${TF_WORKING_DIR}"
+
+              echo "Terraform Init..."
+              terraform init -input=false
+
+              echo "Terraform Validate..."
+              terraform validate
+
+              echo "Terraform Plan..."
+              terraform plan \
+                -input=false \
+                -out=tfplan
+
+              echo "Terraform Apply..."
+              terraform apply \
+                -input=false \
+                -auto-approve \
+                tfplan
+
+              echo "Terraform Outputs..."
+              terraform output
+
+              echo "Terraform Deployment Successful!"
