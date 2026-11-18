@@ -3,7 +3,7 @@ pipeline:
   name: infra Terraform
 
   repo:
-    connector: account.YOUR_GITHUB_CONNECTOR_ID
+    connector: account.harness_pipeline
     name: ChandraShekharSaini/harness
 
   clone:
