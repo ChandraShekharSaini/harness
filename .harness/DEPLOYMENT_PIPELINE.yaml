@@ -1,0 +1,302 @@
+
+pipeline:
+  name: Shopping Site CI CD
+  identifier: shopping_site_ci_cd
+
+  repo:
+    connector: account.harness_pipeline
+    name: ChandraShekharSaini/harness
+
+  clone:
+    ref: main
+
+  inputs:
+    aws_access_key_id:
+      type: secret
+      default: account.AWS_ACCESS_KEY_ID
+
+    aws_secret_access_key:
+      type: secret
+      default: account.AWS_SECRET_ACCESS_KEY
+
+    github_pat:
+      type: secret
+      default: account.GITHUB_PAT
+
+  stages:
+    - name: Build and Deploy
+      id: build_and_deploy
+
+      runtime: cloud
+
+      platform:
+        os: linux
+        arch: amd64
+
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        GITHUB_PAT: ${{ inputs.github_pat }}
+
+        AWS_DEFAULT_REGION: us-east-1
+        AWS_REGION: us-east-1
+
+        FRONTEND_REPOSITORY: shopping-site-frontend
+        BACKEND_REPOSITORY: shopping-site-backend
+
+      steps:
+        - name: Build Push and Update Kubernetes
+          run: |
+            set -eu
+
+            echo "=========================================="
+            echo "HARNESS CI/CD PIPELINE STARTED"
+            echo "=========================================="
+
+            echo "========== 1. CHECK WORKSPACE =========="
+
+            pwd
+            ls -la
+
+            echo "========== 2. VERIFY APPLICATION FILES =========="
+
+            if [ ! -d frontend ]; then
+              echo "ERROR: frontend directory not found"
+              exit 1
+            fi
+
+            if [ ! -d backend ]; then
+              echo "ERROR: backend directory not found"
+              exit 1
+            fi
+
+            echo "Frontend directory found"
+            echo "Backend directory found"
+
+            echo "========== 3. INSTALL DEPENDENCIES =========="
+
+            sudo apt-get update
+            sudo apt-get install -y curl unzip git
+
+            echo "========== 4. INSTALL AWS CLI =========="
+
+            if ! command -v aws >/dev/null 2>&1; then
+
+              curl -fsSL \
+                https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip \
+                -o awscliv2.zip
+
+              unzip -oq awscliv2.zip
+              sudo ./aws/install --update
+
+            fi
+
+            aws --version
+
+            echo "========== 5. CHECK DOCKER =========="
+
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo apt-get install -y docker.io
+            fi
+
+            if ! docker info >/dev/null 2>&1; then
+              sudo service docker start || true
+            fi
+
+            docker --version
+            docker info
+
+            echo "========== 6. VALIDATE AWS CREDENTIALS =========="
+
+            aws sts get-caller-identity
+
+            AWS_ACCOUNT_ID=$(aws sts get-caller-identity \
+              --query Account \
+              --output text)
+
+            ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+            echo "AWS Account: $AWS_ACCOUNT_ID"
+            echo "AWS Region: $AWS_REGION"
+            echo "ECR Registry: $ECR_REGISTRY"
+
+            echo "========== 7. SET IMAGE TAG =========="
+
+            IMAGE_TAG=$(git rev-parse --short HEAD)
+
+            FRONTEND_IMAGE="${ECR_REGISTRY}/${FRONTEND_REPOSITORY}:${IMAGE_TAG}"
+            BACKEND_IMAGE="${ECR_REGISTRY}/${BACKEND_REPOSITORY}:${IMAGE_TAG}"
+
+            echo "Image tag: $IMAGE_TAG"
+            echo "Frontend image: $FRONTEND_IMAGE"
+            echo "Backend image: $BACKEND_IMAGE"
+
+            echo "========== 8. LOGIN TO AMAZON ECR =========="
+
+            aws ecr get-login-password \
+              --region "$AWS_REGION" | \
+              docker login \
+                --username AWS \
+                --password-stdin "$ECR_REGISTRY"
+
+            echo "========== 9. CREATE FRONTEND ECR REPOSITORY =========="
+
+            if ! aws ecr describe-repositories \
+              --repository-names "$FRONTEND_REPOSITORY" \
+              --region "$AWS_REGION" >/dev/null 2>&1; then
+
+              aws ecr create-repository \
+                --repository-name "$FRONTEND_REPOSITORY" \
+                --region "$AWS_REGION" \
+                --image-scanning-configuration scanOnPush=true
+
+            else
+              echo "Frontend ECR repository already exists"
+            fi
+
+            echo "========== 10. BUILD FRONTEND IMAGE =========="
+
+            docker build \
+              -t "$FRONTEND_IMAGE" \
+              ./frontend
+
+            echo "========== 11. PUSH FRONTEND IMAGE =========="
+
+            docker push "$FRONTEND_IMAGE"
+
+            echo "Frontend image pushed successfully"
+
+            echo "========== 12. CREATE BACKEND ECR REPOSITORY =========="
+
+            if ! aws ecr describe-repositories \
+              --repository-names "$BACKEND_REPOSITORY" \
+              --region "$AWS_REGION" >/dev/null 2>&1; then
+
+              aws ecr create-repository \
+                --repository-name "$BACKEND_REPOSITORY" \
+                --region "$AWS_REGION" \
+                --image-scanning-configuration scanOnPush=true
+
+            else
+              echo "Backend ECR repository already exists"
+            fi
+
+            echo "========== 13. BUILD BACKEND IMAGE =========="
+
+            docker build \
+              -t "$BACKEND_IMAGE" \
+              ./backend
+
+            echo "========== 14. PUSH BACKEND IMAGE =========="
+
+            docker push "$BACKEND_IMAGE"
+
+            echo "Backend image pushed successfully"
+
+            echo "========== 15. UPDATE BACKEND MANIFEST =========="
+
+            if [ -f backend/deployment.yml ]; then
+
+              sed -i \
+                "s|image:.*|image: ${BACKEND_IMAGE}|g" \
+                backend/deployment.yml
+
+              echo "Backend manifest updated"
+
+            else
+              echo "WARNING: backend/deployment.yml not found"
+            fi
+
+            echo "========== 16. UPDATE FRONTEND MANIFEST =========="
+
+            if [ -f frontend/deployment.yml ]; then
+
+              sed -i \
+                "s|image:.*|image: ${FRONTEND_IMAGE}|g" \
+                frontend/deployment.yml
+
+              echo "Frontend manifest updated"
+
+            else
+              echo "WARNING: frontend/deployment.yml not found"
+            fi
+
+            echo "========== 17. DISPLAY IMAGE URI =========="
+
+            echo "Frontend:"
+            echo "$FRONTEND_IMAGE"
+
+            echo "Backend:"
+            echo "$BACKEND_IMAGE"
+
+            echo "========== 18. CONFIGURE GIT =========="
+
+            git config user.name "Harness CI"
+            git config user.email "harness-ci@users.noreply.github.com"
+
+            echo "========== 19. STAGE MANIFEST CHANGES =========="
+
+            if [ -f backend/deployment.yml ]; then
+              git add backend/deployment.yml
+            fi
+
+            if [ -f frontend/deployment.yml ]; then
+              git add frontend/deployment.yml
+            fi
+
+            if [ -d K8-argocd ]; then
+              git add K8-argocd/
+            fi
+
+            echo "========== 20. PUSH UPDATED FILES TO GITHUB =========="
+
+            if ! git diff --cached --quiet; then
+
+              git commit \
+                -m "Update ECR image URIs [skip ci]"
+
+              ASKPASS_FILE=$(mktemp)
+
+              trap 'rm -f "$ASKPASS_FILE"' EXIT
+
+              cat > "$ASKPASS_FILE" <<'ASKPASS'
+            #!/bin/sh
+            case "$1" in
+              *Username*) echo "x-access-token" ;;
+              *Password*) echo "$GITHUB_PAT" ;;
+              *) exit 1 ;;
+            esac
+            ASKPASS
+
+              chmod 700 "$ASKPASS_FILE"
+
+              export GIT_ASKPASS="$ASKPASS_FILE"
+              export GIT_TERMINAL_PROMPT=0
+
+              git push \
+                https://github.com/ChandraShekharSaini/harness.git \
+                HEAD:main
+
+              unset GIT_ASKPASS
+
+              rm -f "$ASKPASS_FILE"
+              trap - EXIT
+
+              echo "GitHub push successful"
+
+            else
+              echo "No manifest changes to commit"
+            fi
+
+            echo "========== 21. FINAL STATUS =========="
+
+            git status
+
+            echo "=========================================="
+            echo "CI/CD PIPELINE COMPLETED SUCCESSFULLY"
+            echo "=========================================="
+
+            echo "Frontend image: $FRONTEND_IMAGE"
+            echo "Backend image: $BACKEND_IMAGE"
+
+            echo "Argo CD can detect the updated manifests."
