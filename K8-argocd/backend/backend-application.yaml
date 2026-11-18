@@ -7,7 +7,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/ChandraShekharSaini/EKS-Terraform.git
+    repoURL: https://github.com/ChandraShekharSaini/harness.git
     targetRevision: main
     path: backend
     directory:
