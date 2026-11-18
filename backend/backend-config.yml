@@ -4,7 +4,7 @@ metadata:
   name: backend-config
   namespace: project-1
 data:
-  MYSQL_HOST: "shopping-mysql.c4lyoygcgrfk.us-east-1.rds.amazonaws.com"
+  MYSQL_HOST: "shopping-mysql.cotyq8wcmhll.us-east-1.rds.amazonaws.com"
   DB_PORT: "3306"
   DB_NAME: "shopping"
   MYSQL_USERNAME: "admin"
