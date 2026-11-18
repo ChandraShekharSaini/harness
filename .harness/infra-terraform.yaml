@@ -1,0 +1,120 @@
+
+pipeline:
+  name: infra Terraform
+  identifier: infra_terraform
+
+  inputs:
+    aws_access_key_id:
+      type: secret
+      default: account.AWS_ACCESS_KEY_ID
+
+    aws_secret_access_key:
+      type: secret
+      default: account.AWS_SECRET_ACCESS_KEY
+
+  stages:
+    - name: Terraform Infrastructure
+      identifier: terraform_infrastructure
+
+      platform:
+        os: Linux
+        arch: Amd64
+
+      runtime:
+        type: Docker
+        spec: {}
+
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_DEFAULT_REGION: us-east-1
+        TF_WORKING_DIR: EKS-Terraform
+        TF_IN_AUTOMATION: "true"
+
+      steps:
+        - name: Terraform Deployment
+          run:
+            shell: bash
+
+            env:
+              AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+              AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+              AWS_DEFAULT_REGION: us-east-1
+              TF_WORKING_DIR: EKS-Terraform
+              TF_IN_AUTOMATION: "true"
+
+            script: |
+              set -euo pipefail
+
+              echo "=================================="
+              echo "Harness Terraform Deployment"
+              echo "=================================="
+
+              echo "Checking installed dependencies..."
+
+              command -v terraform
+              command -v aws
+              command -v git
+
+              echo "Terraform version:"
+              terraform version
+
+              echo "AWS CLI version:"
+              aws --version
+
+              echo "Git version:"
+              git --version
+
+              echo "=================================="
+              echo "Validating AWS Credentials"
+              echo "=================================="
+
+              aws sts get-caller-identity
+
+              echo "=================================="
+              echo "Checking Terraform Repository"
+              echo "=================================="
+
+              ls -la
+
+              test -d "${TF_WORKING_DIR}"
+              cd "${TF_WORKING_DIR}"
+
+              echo "=================================="
+              echo "Terraform Init"
+              echo "=================================="
+
+              terraform init -input=false
+
+              echo "=================================="
+              echo "Terraform Validate"
+              echo "=================================="
+
+              terraform validate
+
+              echo "=================================="
+              echo "Terraform Plan"
+              echo "=================================="
+
+              terraform plan \
+                -input=false \
+                -out=tfplan
+
+              echo "=================================="
+              echo "Terraform Apply"
+              echo "=================================="
+
+              terraform apply \
+                -input=false \
+                -auto-approve \
+                tfplan
+
+              echo "=================================="
+              echo "Terraform Outputs"
+              echo "=================================="
+
+              terraform output
+
+              echo "=================================="
+              echo "Terraform Deployment Successful!"
+              echo "=================================="
