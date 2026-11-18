@@ -1,0 +1,84 @@
+
+pipeline:
+  name: infra Terraform
+
+  inputs:
+    aws_access_key_id:
+      type: secret
+      default: account.AWS_ACCESS_KEY_ID
+
+    aws_secret_access_key:
+      type: secret
+      default: account.AWS_SECRET_ACCESS_KEY
+
+  stages:
+    - name: Terraform Infrastructure
+      id: terraform_infrastructure
+
+      runtime: cloud
+
+      platform:
+        os: linux
+        arch: amd64
+
+     
+      steps:
+        - name: Terraform Deployment
+          run: |
+            set -euo pipefail
+
+            echo "Harness Cloud Terraform Deployment"
+
+            sudo apt-get update
+            sudo apt-get install -y curl unzip
+
+            # Install Terraform
+            TERRAFORM_VERSION=1.9.8
+
+            curl -fsSLo terraform.zip \
+              https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+
+            unzip -o terraform.zip
+            sudo install terraform /usr/local/bin/terraform
+
+            # Install AWS CLI
+            curl -fsSL \
+              https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip \
+              -o awscliv2.zip
+
+            unzip -oq awscliv2.zip
+            sudo ./aws/install --update
+
+            echo "Checking dependencies..."
+            terraform version
+            aws --version
+            git --version
+
+            echo "Validating AWS credentials..."
+            aws sts get-caller-identity
+
+            echo "Checking Terraform directory..."
+            ls -la
+            test -d "EKS-Terraform"
+
+            cd EKS-Terraform
+
+            echo "Terraform Init..."
+            terraform init -input=false
+
+            echo "Terraform Validate..."
+            terraform validate
+
+            echo "Terraform Plan..."
+            terraform plan -input=false -out=tfplan
+
+            echo "Terraform Apply..."
+            terraform apply \
+              -input=false \
+              -auto-approve \
+              tfplan
+
+            echo "Terraform Outputs..."
+            terraform output
+
+            echo "Terraform deployment successful!"
