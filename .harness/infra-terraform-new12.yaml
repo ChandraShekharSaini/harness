@@ -21,13 +21,23 @@ pipeline:
         os: linux
         arch: amd64
 
-     
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_DEFAULT_REGION: us-east-1
+        TF_WORKING_DIR: EKS-Terraform
+        TF_IN_AUTOMATION: "true"
+
       steps:
         - name: Terraform Deployment
           run: |
-            set -euo pipefail
+            set -eu
 
+            echo "=================================="
             echo "Harness Cloud Terraform Deployment"
+            echo "=================================="
+
+            echo "Installing dependencies..."
 
             sudo apt-get update
             sudo apt-get install -y curl unzip
@@ -36,7 +46,7 @@ pipeline:
             TERRAFORM_VERSION=1.9.8
 
             curl -fsSLo terraform.zip \
-              https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+              "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
 
             unzip -o terraform.zip
             sudo install terraform /usr/local/bin/terraform
@@ -50,35 +60,62 @@ pipeline:
             sudo ./aws/install --update
 
             echo "Checking dependencies..."
+
             terraform version
             aws --version
             git --version
 
-            echo "Validating AWS credentials..."
+            echo "=================================="
+            echo "Validating AWS Credentials"
+            echo "=================================="
+
             aws sts get-caller-identity
 
-            echo "Checking Terraform directory..."
+            echo "=================================="
+            echo "Checking Terraform Directory"
+            echo "=================================="
+
+            pwd
             ls -la
-            test -d "EKS-Terraform"
 
-            cd EKS-Terraform
+            test -d "$TF_WORKING_DIR"
+            cd "$TF_WORKING_DIR"
 
-            echo "Terraform Init..."
+            echo "=================================="
+            echo "Terraform Init"
+            echo "=================================="
+
             terraform init -input=false
 
-            echo "Terraform Validate..."
+            echo "=================================="
+            echo "Terraform Validate"
+            echo "=================================="
+
             terraform validate
 
-            echo "Terraform Plan..."
-            terraform plan -input=false -out=tfplan
+            echo "=================================="
+            echo "Terraform Plan"
+            echo "=================================="
 
-            echo "Terraform Apply..."
+            terraform plan \
+              -input=false \
+              -out=tfplan
+
+            echo "=================================="
+            echo "Terraform Apply"
+            echo "=================================="
+
             terraform apply \
               -input=false \
               -auto-approve \
               tfplan
 
-            echo "Terraform Outputs..."
+            echo "=================================="
+            echo "Terraform Outputs"
+            echo "=================================="
+
             terraform output
 
-            echo "Terraform deployment successful!"
+            echo "=================================="
+            echo "Terraform Deployment Successful!"
+            echo "=================================="
