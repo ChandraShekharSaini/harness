@@ -1,0 +1,60 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: project-1
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: backend
+
+  template:
+    metadata:
+      labels:
+        app: backend
+
+    spec:
+      serviceAccountName: backend-sa
+
+      containers:
+        - name: backend
+          image: 215229808004.dkr.ecr.us-east-1.amazonaws.com/shopping-site-backend:0c9a0fe906082c9cca734323979818952279cdb4
+
+          ports:
+            - containerPort: 8084
+
+          envFrom:
+            - configMapRef:
+                name: backend-config
+
+          # env:
+          #   - name: MYSQL_PASSWORD
+          #     valueFrom:
+          #       secretKeyRef:
+          #         name: mysql-secret
+          #         key: MYSQL_PASSWORD
+
+
+---
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: project-1
+
+spec:
+  selector:
+    app: backend
+
+  ports:
+    - protocol: TCP
+      port: 8084
+      targetPort: 8084
+
+  type: ClusterIP
