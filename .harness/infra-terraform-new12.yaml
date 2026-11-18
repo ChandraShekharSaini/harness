@@ -37,12 +37,15 @@ pipeline:
             echo "Harness Cloud Terraform Deployment"
             echo "=================================="
 
-            echo "Installing dependencies..."
+            echo "========== WORKSPACE CHECK =========="
+            pwd
+            ls -la
+
+            echo "========== INSTALLING DEPENDENCIES =========="
 
             sudo apt-get update
-            sudo apt-get install -y curl unzip
+            sudo apt-get install -y curl unzip git
 
-            # Install Terraform
             TERRAFORM_VERSION=1.9.8
 
             curl -fsSLo terraform.zip \
@@ -51,7 +54,6 @@ pipeline:
             unzip -o terraform.zip
             sudo install terraform /usr/local/bin/terraform
 
-            # Install AWS CLI
             curl -fsSL \
               https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip \
               -o awscliv2.zip
@@ -59,63 +61,50 @@ pipeline:
             unzip -oq awscliv2.zip
             sudo ./aws/install --update
 
-            echo "Checking dependencies..."
-
+            echo "========== CHECKING TOOL VERSIONS =========="
             terraform version
             aws --version
             git --version
 
-            echo "=================================="
-            echo "Validating AWS Credentials"
-            echo "=================================="
-
+            echo "========== VALIDATING AWS CREDENTIALS =========="
             aws sts get-caller-identity
 
-            echo "=================================="
-            echo "Checking Terraform Directory"
-            echo "=================================="
+            echo "========== CHECKING TERRAFORM DIRECTORY =========="
 
+            if [ ! -d "$TF_WORKING_DIR" ]; then
+              echo "ERROR: $TF_WORKING_DIR not found."
+              echo "Current workspace:"
+              pwd
+              ls -la
+              echo "Searching workspace for Terraform files:"
+              find . -maxdepth 5 -name "*.tf" -print
+              exit 1
+            fi
+
+            cd "$TF_WORKING_DIR"
+
+            echo "Terraform working directory:"
             pwd
             ls -la
 
-            test -d "$TF_WORKING_DIR"
-            cd "$TF_WORKING_DIR"
-
-            echo "=================================="
-            echo "Terraform Init"
-            echo "=================================="
-
+            echo "========== TERRAFORM INIT =========="
             terraform init -input=false
 
-            echo "=================================="
-            echo "Terraform Validate"
-            echo "=================================="
-
+            echo "========== TERRAFORM VALIDATE =========="
             terraform validate
 
-            echo "=================================="
-            echo "Terraform Plan"
-            echo "=================================="
-
+            echo "========== TERRAFORM PLAN =========="
             terraform plan \
               -input=false \
               -out=tfplan
 
-            echo "=================================="
-            echo "Terraform Apply"
-            echo "=================================="
-
+            echo "========== TERRAFORM APPLY =========="
             terraform apply \
               -input=false \
               -auto-approve \
               tfplan
 
-            echo "=================================="
-            echo "Terraform Outputs"
-            echo "=================================="
-
+            echo "========== TERRAFORM OUTPUTS =========="
             terraform output
 
-            echo "=================================="
-            echo "Terraform Deployment Successful!"
-            echo "=================================="
+            echo "Terraform deployment completed."
